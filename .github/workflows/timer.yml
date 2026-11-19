@@ -1,0 +1,39 @@
+name: Brief timer
+
+# Starts the NDX Morning Brief (a private repo) at 08:52 New York every trading day.
+# GitHub runs this account's scheduled jobs hours late and skips many, so slots run through the
+# night; the first one to fire waits on the runner (free here: this repo is public) and dispatches
+# the brief, which starts at once. Later slots exit if a timer run is already waiting.
+# More than ~5.3 h early, a run sleeps 5.3 h and dispatches the next timer run. See timer.py.
+on:
+  schedule:
+    - cron: "11 0-12 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run (normal), check (token can read the brief's runs) or recover (start a catch-up brief now)"
+        type: choice
+        options: [run, check, recover]
+        default: run
+
+permissions:
+  contents: read
+  actions: write          # list this timer's runs and dispatch the next one
+
+jobs:
+  timer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for 08:52 New York and start the brief
+        env:
+          BRIEF_TOKEN: ${{ secrets.BRIEF_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode || 'run' }}
+        run: |
+          case "$MODE" in
+            check) python3 timer.py --check ;;
+            recover) python3 timer.py --recover ;;
+            *) python3 timer.py ;;
+          esac
